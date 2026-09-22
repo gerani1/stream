@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 252 252 253;
+  --fg: 17 20 24;
+  --muted: 105 112 122;
+  --line: 224 227 232;
+  --accent: 32 94 214;
+  --warn: 176 104 8;
+  --danger: 190 42 42;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: 14 16 19;
+    --fg: 234 237 241;
+    --muted: 142 150 161;
+    --line: 38 43 50;
+    --accent: 106 160 255;
+    --warn: 224 158 62;
+    --danger: 240 110 110;
+  }
+}
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-line bg-transparent px-3 py-2 text-sm
+           outline-none focus:border-accent;
+  }
+  .btn-primary {
+    @apply rounded-md bg-accent px-4 py-2 text-sm font-medium text-white
+           disabled:opacity-60;
+  }
+}

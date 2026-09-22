@@ -1,0 +1,236 @@
+// Board database.
+//
+// This is a CACHE of chain truth, never the source of it. Any stream figure
+// shown to a user is reconciled against StreamProvider.getStreamStatus by the
+// reconcile job. See README > Architecture > Backend.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  stacksAddress String   @unique
+  displayName   String?
+  bio           String?
+  avatarUrl     String?
+  roles         String[] @default(["builder"])
+  createdAt     DateTime @default(now())
+
+  fundedTasks  Task[]          @relation("funder")
+  participants Participant[]
+  applications Application[]
+  votes        Vote[]
+  auditEntries AuditLog[]
+  nonces       AuthNonce[]
+
+  @@index([stacksAddress])
+}
+
+model AuthNonce {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  address   String
+  nonce     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([address])
+}
+
+model Task {
+  id              String   @id @default(uuid())
+  type            String // bounty | cohort
+  status          String   @default("DRAFT")
+  funderId        String
+  funder          User     @relation("funder", fields: [funderId], references: [id])
+  title           String
+  description     String
+  successCriteria String
+  skillTags       String[] @default([])
+
+  tokenKind     String // stx | sbtc | sip010
+  tokenContract String?
+  totalAmount   String // micro-units, decimal string (bigint is not JSON-safe)
+
+  durationSeconds Int?
+  reviewCadence   String? // weekly | biweekly | on_submission
+
+  depositTxId String?  @unique
+  depositRef  String?
+  fundedAt    DateTime?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  participants Participant[]
+  applications Application[]
+  streams      Stream[]
+  reviewCycles ReviewCycle[]
+
+  @@index([status, type])
+}
+
+model Participant {
+  id                String   @id @default(uuid())
+  taskId            String
+  task              Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  role              String   @default("builder") // builder | project
+  allocationAmount  String
+  recipientAddress  String
+  status            String   @default("selected")
+  joinedAt          DateTime @default(now())
+  exitedAt          DateTime?
+
+  stream  Stream?
+  reports Report[]
+  reviews Review[]
+
+  @@unique([taskId, userId])
+  @@index([status])
+}
+
+model Application {
+  id              String   @id @default(uuid())
+  taskId          String
+  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  proposal        String
+  productUrl      String?
+  currentTraction Json?
+  status          String   @default("pending") // pending | shortlisted | selected | rejected
+  createdAt       DateTime @default(now())
+
+  @@unique([taskId, userId])
+}
+
+model Stream {
+  id               String   @id @default(uuid())
+  taskId           String
+  task             Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  participantId    String   @unique
+  participant      Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  providerRef      String   @unique
+  recipientAddress String
+  amount           String
+  ratePerSecond    String
+  state            String   @default("active")
+  disbursed        String   @default("0")
+  startedAt        DateTime
+  endsAt           DateTime
+  // Set when a bounty stream is paused, so auto-resume can find it.
+  pausedAt         DateTime?
+  lastSyncedAt     DateTime @default(now())
+
+  events StreamEvent[]
+
+  @@index([state])
+}
+
+model StreamEvent {
+  id                String   @id @default(uuid())
+  streamId          String
+  stream            Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  kind              String // started | paused | resumed | stopped | completed
+  txId              String?
+  blockHeight       Int?
+  disbursedAtEvent  String?
+  reason            String?
+  observedAt        DateTime @default(now())
+
+  @@index([streamId, observedAt])
+}
+
+model Report {
+  id             String   @id @default(uuid())
+  participantId  String
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  reviewCycleId  String?
+  reviewCycle    ReviewCycle? @relation(fields: [reviewCycleId], references: [id])
+  periodStart    DateTime
+  periodEnd      DateTime
+  usersOnboarded Int
+  txCount        Int
+  txVolume       String
+  retentionDelta Float
+  shipped        String
+  nextPlan       String
+  blockers       String?
+  submittedAt    DateTime @default(now())
+
+  @@unique([participantId, reviewCycleId])
+}
+
+model ReviewCycle {
+  id            String   @id @default(uuid())
+  taskId        String
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sequence      Int
+  windowOpensAt DateTime
+  windowClosesAt DateTime
+  meetingAt     DateTime
+  status        String   @default("scheduled") // scheduled | open | closed | finalized
+
+  reports Report[]
+  reviews Review[]
+
+  @@unique([taskId, sequence])
+}
+
+model Review {
+  id            String   @id @default(uuid())
+  reviewCycleId String
+  reviewCycle   ReviewCycle @relation(fields: [reviewCycleId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  outcome       String // on_track | flagged | dropped
+  rationale     String?
+  decidedAt     DateTime @default(now())
+
+  votes Vote[]
+
+  @@unique([reviewCycleId, participantId])
+}
+
+// Votes are append-only: a changed mind is a new row, and the latest cast wins.
+model Vote {
+  id       String   @id @default(uuid())
+  reviewId String
+  review   Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  memberId String
+  member   User     @relation(fields: [memberId], references: [id])
+  value    String // continue | flag | drop
+  note     String?
+  castAt   DateTime @default(now())
+
+  @@index([reviewId, castAt])
+}
+
+// Append-only. Every state transition and every stream control action lands
+// here — this is what makes a drop decision defensible after the fact.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  entityType String
+  entityId   String
+  action     String
+  before     Json?
+  after      Json?
+  reason     String?
+  txRef      String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}
