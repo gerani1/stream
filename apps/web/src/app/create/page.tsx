@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { formatAmount } from '@/lib/format';
+import { Field, Notice, PageHeader, Row } from '@/components/ui';
 
-type Step = 'details' | 'deposit' | 'configure' | 'done';
+type Step = 'details' | 'deposit' | 'configure';
+
+const STEPS: Array<[Step, string]> = [
+  ['details', 'Details'],
+  ['deposit', 'Deposit'],
+  ['configure', 'Configure'],
+];
 
 /**
  * The deposit is what creates the task — this is the highest-stakes screen in
@@ -17,6 +24,7 @@ export default function CreateTaskPage() {
   const [step, setStep] = useState<Step>('details');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cadenceOverride, setCadenceOverride] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [details, setDetails] = useState({
@@ -34,10 +42,28 @@ export default function CreateTaskPage() {
     recipients: '',
   });
 
-  async function createDraft() {
+  /** Wraps a step action so every path clears the error and releases the button. */
+  async function run(fn: () => Promise<void>, fallback: string) {
     setBusy(true);
     setError(null);
     try {
+      await fn();
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'CADENCE_WARNING') {
+        // The API blocks a cadence that leaves too few review cycles for
+        // two-strike to reach a drop; the funder can override knowingly.
+        setCadenceOverride(true);
+        setError(`${e.message}\n\nPress Configure again to proceed anyway.`);
+        return;
+      }
+      setError(e instanceof Error ? e.message : fallback);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const createDraft = () =>
+    run(async () => {
       const task = await api<{ id: string }>('/tasks', {
         method: 'POST',
         body: JSON.stringify({
@@ -52,18 +78,11 @@ export default function CreateTaskPage() {
       });
       setTaskId(task.id);
       setStep('deposit');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create the task');
-    } finally {
-      setBusy(false);
-    }
-  }
+    }, 'Could not create the task');
 
-  async function deposit() {
-    if (!taskId) return;
-    setBusy(true);
-    setError(null);
-    try {
+  const deposit = () =>
+    run(async () => {
+      if (!taskId) return;
       // The wallet signs this; the board never holds keys or funds.
       const unsigned = await api<{ summary: string; payload: Record<string, unknown> }>(
         `/tasks/${taskId}/deposit/build`,
@@ -72,24 +91,16 @@ export default function CreateTaskPage() {
       // TODO(integration): hand `unsigned.payload` to @stacks/connect once the
       // StackStream call shape is settled. Against the mock provider the tx id
       // comes back in the payload, which is what lets this flow run today.
-      const txId = String(unsigned.payload.txId);
       await api(`/tasks/${taskId}/deposit/confirm`, {
         method: 'POST',
-        body: JSON.stringify({ txId }),
+        body: JSON.stringify({ txId: String(unsigned.payload.txId) }),
       });
       setStep('configure');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Deposit failed');
-    } finally {
-      setBusy(false);
-    }
-  }
+    }, 'Deposit failed');
 
-  async function configure(acknowledgeCadenceWarning = false) {
-    if (!taskId) return;
-    setBusy(true);
-    setError(null);
-    try {
+  const configure = () =>
+    run(async () => {
+      if (!taskId) return;
       await api(`/tasks/${taskId}/configure`, {
         method: 'POST',
         body: JSON.stringify({
@@ -99,43 +110,38 @@ export default function CreateTaskPage() {
             model: 'even',
             recipients: config.recipients.split(/[\s,]+/).filter(Boolean),
           },
-          acknowledgeCadenceWarning,
+          acknowledgeCadenceWarning: cadenceOverride,
         }),
       });
-      setStep('done');
       router.push(`/tasks/${taskId}`);
-    } catch (e) {
-      // The API blocks a cadence that leaves too few review cycles for
-      // two-strike to reach a drop; the funder can override knowingly.
-      if (e instanceof ApiError && e.code === 'CADENCE_WARNING') {
-        setError(`${e.message}\n\nPress Configure again to proceed anyway.`);
-        setBusy(false);
-        return;
-      }
-      setError(e instanceof Error ? e.message : 'Configuration failed');
-    } finally {
-      setBusy(false);
-    }
-  }
+    }, 'Configuration failed');
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <Steps current={step} />
+    <div className="mx-auto w-full max-w-xl space-y-8 px-6 py-14">
+      <ol className="flex gap-1 rounded-full bg-subtle p-1 text-xs">
+        {STEPS.map(([key, label], i) => (
+          <li
+            key={key}
+            aria-current={step === key ? 'step' : undefined}
+            className={`flex-1 rounded-full px-4 py-2.5 text-center font-medium transition-colors ${
+              step === key ? 'bg-surface text-fg shadow-soft' : 'text-muted'
+            }`}
+          >
+            {i + 1}. {label}
+          </li>
+        ))}
+      </ol>
 
-      {error && (
-        <p className="whitespace-pre-wrap rounded-md border border-warn/40 bg-warn/5 p-3 text-sm text-warn">
-          {error}
-        </p>
-      )}
+      {error && <Notice tone="warn">{error}</Notice>}
 
       {step === 'details' && (
-        <section className="space-y-4">
-          <h1 className="text-xl font-semibold">Task details</h1>
+        <section className="space-y-5">
+          <PageHeader title="Task details" />
           <Field label="Type">
             <select
+              className="input"
               value={details.type}
               onChange={(e) => setDetails({ ...details, type: e.target.value as 'bounty' | 'cohort' })}
-              className="input"
             >
               <option value="bounty">Bounty — one deliverable, one builder</option>
               <option value="cohort">Cohort — multiple projects, periodic review</option>
@@ -177,37 +183,37 @@ export default function CreateTaskPage() {
               onChange={(e) => setDetails({ ...details, totalAmount: e.target.value })}
             />
           </Field>
-          <button onClick={createDraft} disabled={busy} className="btn-primary">
+          <button onClick={createDraft} disabled={busy} className="btn-primary w-full">
             Continue to deposit
           </button>
         </section>
       )}
 
       {step === 'deposit' && (
-        <section className="space-y-4">
-          <h1 className="text-xl font-semibold">Review and deposit</h1>
-          <div className="rounded-lg border border-line p-4 text-sm">
+        <section className="space-y-5">
+          <PageHeader title="Review and deposit" />
+          <div className="card-flat text-sm">
             <Row label="Task">{details.title}</Row>
             <Row label="Type">{details.type}</Row>
             <Row label="Amount">{formatAmount(details.totalAmount || '0')} STX</Row>
           </div>
-          <p className="rounded-md border border-line bg-line/20 p-3 text-xs text-muted">
+          <Notice>
             Your deposit goes to StackStream, not to this board — the board never takes custody of
             your funds. Signing this transaction is what creates the task. You will choose recipients
             and duration on the next screen.
-          </p>
-          <button onClick={deposit} disabled={busy} className="btn-primary">
+          </Notice>
+          <button onClick={deposit} disabled={busy} className="btn-primary w-full">
             {busy ? 'Waiting for confirmation…' : 'Sign deposit'}
           </button>
         </section>
       )}
 
       {step === 'configure' && (
-        <section className="space-y-4">
-          <h1 className="text-xl font-semibold">Configure the stream</h1>
-          <p className="text-sm text-muted">
-            The task is funded. One deposit funds every recipient below in parallel.
-          </p>
+        <section className="space-y-5">
+          <PageHeader
+            title="Configure the stream"
+            description="The task is funded. One deposit funds every recipient below in parallel."
+          />
           <Field label="Recipients" hint="One Stacks address per line. The amount splits evenly.">
             <textarea
               className="input min-h-24 font-mono text-xs"
@@ -237,64 +243,11 @@ export default function CreateTaskPage() {
               <option value="biweekly">Biweekly</option>
             </select>
           </Field>
-          <button
-            onClick={() => configure(Boolean(error))}
-            disabled={busy}
-            className="btn-primary"
-          >
-            Configure and open
+          <button onClick={configure} disabled={busy} className="btn-primary w-full">
+            {cadenceOverride ? 'Configure anyway' : 'Configure and open'}
           </button>
         </section>
       )}
-    </div>
-  );
-}
-
-function Steps({ current }: { current: Step }) {
-  const steps: Array<[Step, string]> = [
-    ['details', 'Details'],
-    ['deposit', 'Deposit'],
-    ['configure', 'Configure'],
-  ];
-  return (
-    <ol className="flex gap-2 text-xs">
-      {steps.map(([key, label], i) => (
-        <li
-          key={key}
-          className={`rounded-full border px-3 py-1 ${
-            current === key ? 'border-accent text-accent' : 'border-line text-muted'
-          }`}
-        >
-          {i + 1}. {label}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      {hint && <span className="block text-xs text-muted">{hint}</span>}
-      {children}
-    </label>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex justify-between border-b border-line py-2 last:border-0">
-      <span className="text-muted">{label}</span>
-      <span className="font-medium">{children}</span>
     </div>
   );
 }

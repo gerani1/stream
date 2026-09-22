@@ -9,7 +9,6 @@ The board never holds user funds. Deposits live on StackStream; the board is the
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
-- [Prior art: Flow State](#prior-art-flow-state)
 - [Non-custodial by design](#non-custodial-by-design)
 - [Product types](#product-types)
 - [Core flows](#core-flows)
@@ -32,24 +31,6 @@ Lump-sum payouts are a bad fit for open-ended work. A funder either pays up fron
 StackStream already provides the streaming rail on Stacks. What it lacks is a **user-facing marketplace layer** — a place where funders post work, builders find it, and a review loop decides whether a stream keeps running. That layer is this board.
 
 The goal is one reusable front end that works equally well for a one-week freelance task and a three-month ecosystem growth program.
-
----
-
-## Prior art: Flow State
-
-This product is a deliberate port of [**Flow State**](https://www.flowstate.network/), the mechanic GoodDollar uses to run its builder grant programs on Celo.
-
-The Flow State model, in short:
-
-- A cohort of **already-deployed products** is selected for a fixed program length (~3 months).
-- Each project receives a **streamed stipend** for the duration, rather than a milestone-gated grant.
-- Projects are measured on **real product activity** — users onboarded, transaction count, volume, retention — not on promises or deliverables.
-- The cohort meets on a **fixed cadence** (biweekly). Each project reports what shipped and how the numbers moved.
-- Streams continue for projects that are growing. Projects that stall are flagged, then cut.
-
-This is proven, not speculative. Naming it explicitly is a strength in the pitch: *"this mechanic works on Celo, here is the Stacks version, running on StackStream's rail."* The contribution here is the port and the marketplace surface, not the invention of the mechanic.
-
-**What we change from Flow State:** we add a second, lighter product type (single-deliverable bounties) that runs over the same backend, and we make the whole thing non-custodial by pushing fund custody onto StackStream.
 
 ---
 
@@ -588,7 +569,7 @@ POST   /webhooks/chainhook              stream event ingestion (signed)
 
 ### On metric verification
 
-Reports are self-reported at launch, and the committee is the verification layer — exactly as Flow State runs it. Automated verification of on-chain product activity (indexing a project's own contract for tx count and unique users) is a strong later addition, but it is not a prerequisite. Do not let it block the MVP.
+Reports are self-reported at launch, and the committee is the verification layer. Automated verification of on-chain product activity (indexing a project's own contract for tx count and unique users) is a strong later addition, but it is not a prerequisite. Do not let it block the MVP.
 
 ---
 

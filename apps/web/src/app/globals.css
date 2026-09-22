@@ -2,40 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Design system: soft modern SaaS.
+ *
+ * One confident accent colour carries the whole product — everything else is
+ * neutral grey plus three small semantic colours (live / warn / danger). Depth
+ * comes from soft shadows and generous rounding, not from drawn borders.
+ * Borders are hairline and quiet; they outline, they don't structure.
+ */
 :root {
-  --bg: 252 252 253;
-  --fg: 17 20 24;
-  --muted: 105 112 122;
-  --line: 224 227 232;
-  --accent: 32 94 214;
-  --warn: 176 104 8;
-  --danger: 190 42 42;
+  --bg: 255 255 255;
+  --surface: 255 255 255;
+  --subtle: 248 249 251; /* alternating section background */
+  --raised: 255 255 255; /* card on a subtle section */
+
+  --fg: 15 18 25;
+  --fg-invert: 255 255 255;
+  --muted: 100 106 119;
+  --muted-invert: 176 182 196;
+
+  --border: 228 230 235;
+  --border-invert: 54 59 71;
+
+  /* One confident accent. Indigo — used for every primary action and for the
+     "this is the important one" signal across the whole product. */
+  --accent: 79 70 229;
+  --accent-hover: 65 58 196;
+  --accent-soft: 238 238 253;
+  --accent-fg: 255 255 255;
+
+  /* Ink section: the single inverted band, reserved for the non-custodial
+     promise so it reads as the one thing the page insists on. */
+  --ink: 17 19 24;
+
+  /**
+   * Stacks orange — the chain's own brand colour (#FC6432), used purely as a
+   * decorative accent: background glows, icon fills, thin card highlights.
+   * It never carries an action (that's `accent`) and never carries status
+   * (that's `live`/`warn`/`danger`) — it just marks "this is Stacks."
+   *
+   * The raw brand value only reaches 3.0:1 on white, so it is never used as
+   * small text. `--stacks-ink` is a darkened, same-hue variant kept for the
+   * rare case text needs to sit in the brand colour; `--stacks` stays true to
+   * the brand for fills, icons and glows, where contrast doesn't apply.
+   */
+  --stacks: 252 100 50;
+  --stacks-ink: 221 56 11;
+  --stacks-soft: 254 236 227;
+
+  /* Semantic — small, deliberately underused */
+  --live: 5 150 105;
+  --live-soft: 236 249 244;
+  --warn: 180 83 9;
+  --warn-soft: 254 246 231;
+  --danger: 190 34 45;
+  --danger-soft: 253 236 237;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: 14 16 19;
-    --fg: 234 237 241;
-    --muted: 142 150 161;
-    --line: 38 43 50;
-    --accent: 106 160 255;
-    --warn: 224 158 62;
-    --danger: 240 110 110;
-  }
-}
-
+html,
 body {
   background: rgb(var(--bg));
   color: rgb(var(--fg));
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.18);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    @apply text-balance tracking-tight;
+  }
+}
+
 @layer components {
-  .input {
-    @apply w-full rounded-md border border-line bg-transparent px-3 py-2 text-sm
-           outline-none focus:border-accent;
+  /* ---- controls ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm
+           font-semibold transition-all duration-150
+           disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply rounded-md bg-accent px-4 py-2 text-sm font-medium text-white
-           disabled:opacity-60;
+    @apply btn bg-accent text-accent-fg shadow-soft hover:bg-accent-hover hover:shadow-lift;
+  }
+  .btn-ghost {
+    @apply btn border border-border bg-surface text-fg hover:border-fg/20 hover:bg-subtle;
+  }
+  .btn-sm {
+    @apply px-4 py-2 text-xs;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-fg
+           outline-none transition-colors placeholder:text-muted/70
+           focus:border-accent focus:ring-2 focus:ring-accent/15;
+  }
+
+  /* ---- surfaces ---- */
+  .card {
+    @apply rounded-2xl border border-border bg-surface p-6 shadow-soft;
+  }
+  .card-flat {
+    @apply rounded-2xl border border-border bg-surface p-6;
+  }
+  .card-interactive {
+    @apply card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.1em];
   }
 }

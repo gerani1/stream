@@ -18,7 +18,7 @@ export function WalletButton() {
     return (
       <button
         onClick={() => connectWallet(() => setAddress(currentAddress()))}
-        className="rounded-md border border-line px-3 py-1.5 text-sm hover:border-accent"
+        className="btn-ghost btn-sm"
       >
         Connect wallet
       </button>
@@ -38,7 +38,7 @@ export function WalletButton() {
             setBusy(false);
           }
         }}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-60"
+        className="btn-primary btn-sm"
       >
         {busy ? 'Check your wallet…' : 'Sign in'}
       </button>
@@ -52,8 +52,8 @@ export function WalletButton() {
         setAddress(null);
         setAuthed(false);
       }}
-      className="rounded-md border border-line px-3 py-1.5 font-mono text-xs text-muted hover:text-fg"
-      title="Sign out"
+      className="btn-ghost btn-sm font-mono"
+      title={`${address} — sign out`}
     >
       {address.slice(0, 5)}…{address.slice(-4)}
     </button>

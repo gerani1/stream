@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { StreamStatus } from '@/lib/api';
 import { formatAmount } from '@/lib/format';
+import { Badge } from './ui';
 
 /**
  * Live stream display.
@@ -45,25 +46,25 @@ export function StreamProgress({
   const pct = total === 0n ? 0 : Number((disbursed * 10_000n) / total) / 100;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex items-baseline justify-between text-sm">
-        <span className="font-medium tabular-nums">{formatAmount(disbursed.toString())}</span>
+        <span className="font-semibold tabular-nums">{formatAmount(disbursed.toString())}</span>
         <span className="text-muted tabular-nums">of {formatAmount(amount)}</span>
       </div>
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-line"
+        className="h-2 w-full overflow-hidden rounded-full bg-subtle"
         role="progressbar"
         aria-valuenow={Math.round(pct)}
         aria-valuemin={0}
         aria-valuemax={100}
       >
         <div
-          className={`h-full transition-[width] duration-1000 ease-linear ${barColor(status.state)}`}
+          className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${barColor(status.state)}`}
           style={{ width: `${Math.min(100, pct)}%` }}
         />
       </div>
       <div className="flex items-center justify-between text-xs text-muted">
-        <StateBadge state={status.state} />
+        <StreamBadge state={status.state} />
         <span className="tabular-nums">{pct.toFixed(2)}%</span>
       </div>
     </div>
@@ -86,28 +87,38 @@ function interpolate(status: StreamStatus, now: number, total: bigint): bigint {
 function barColor(state: StreamStatus['state']): string {
   switch (state) {
     case 'active':
-      return 'bg-accent';
+      return 'bg-live';
     case 'paused':
       return 'bg-warn';
     case 'stopped':
       return 'bg-danger';
     case 'completed':
-      return 'bg-accent/60';
+      return 'bg-accent';
   }
 }
 
-export function StateBadge({ state }: { state: StreamStatus['state'] | string }) {
-  const label: Record<string, string> = {
-    active: 'Streaming',
-    paused: 'Paused',
-    stopped: 'Stopped',
-    completed: 'Completed',
-  };
-  const tone: Record<string, string> = {
-    active: 'text-accent',
-    paused: 'text-warn',
-    stopped: 'text-danger',
-    completed: 'text-muted',
-  };
-  return <span className={`font-medium ${tone[state] ?? 'text-muted'}`}>{label[state] ?? state}</span>;
+const STREAM_LABEL: Record<string, string> = {
+  active: 'Streaming',
+  paused: 'Paused',
+  stopped: 'Stopped',
+  completed: 'Completed',
+  flagged: 'Flagged',
+  dropped: 'Dropped',
+};
+
+const STREAM_TONE: Record<string, 'neutral' | 'accent' | 'live' | 'warn' | 'danger'> = {
+  active: 'live',
+  paused: 'warn',
+  stopped: 'danger',
+  completed: 'accent',
+  flagged: 'warn',
+  dropped: 'danger',
+};
+
+export function StreamBadge({ state, title }: { state: string; title?: string }) {
+  return (
+    <Badge tone={STREAM_TONE[state] ?? 'neutral'} title={title} dot={state === 'active'}>
+      {STREAM_LABEL[state] ?? state}
+    </Badge>
+  );
 }
